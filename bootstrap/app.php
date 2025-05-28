@@ -17,6 +17,8 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         $middleware->statefulApi();
     })
+    ->withSchedule(function ($schedule) {
+    })
     ->withExceptions(function (Exceptions $exceptions) {
         //
     })->create();
