@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Book;
 use App\Models\Author;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Intervention\Image\ImageManager;
+use Illuminate\Support\Str;
 
 class BookController extends Controller
 {
@@ -36,7 +39,35 @@ class BookController extends Controller
             'description' => 'required|string',
             'publication_date' => 'required|date',
             'author_id' => 'required|exists:authors,id',
+            'cover_image' => 'nullable|image|mimes:png,jpg|max:2048',
+        ], [
+            'cover_image.mimes' => 'A imagem de capa deve ser um arquivo do tipo: png ou jpg.',
         ]);
+
+        if ($request->hasFile('cover_image')) {
+            $image = $request->file('cover_image');
+
+            $allowedMimeTypes = ['image/jpeg', 'image/png'];
+            if (!in_array($image->getMimeType(), $allowedMimeTypes)) {
+                return back()
+                    ->withErrors(['cover_image' => 'O tipo da imagem é inválido. Apenas JPEG e PNG são permitidos.'])
+                    ->withInput();
+            }
+
+            $filename = Str::uuid() . '.' . $image->getClientOriginalExtension();
+
+            $manager = new ImageManager(
+                new \Intervention\Image\Drivers\Gd\Driver()
+            );
+
+            $resizedImage = $manager->read($request->file('cover_image'))
+                ->resize(200, 200)
+                ->toJpeg();
+
+            Storage::disk('public')->put("covers/{$filename}", $resizedImage);
+
+            $validatedData['cover_image_path'] = "covers/{$filename}";
+        }
 
         Book::create($validatedData);
 
@@ -71,7 +102,32 @@ class BookController extends Controller
             'description' => 'required|string',
             'publication_date' => 'required|date',
             'author_id' => 'required|exists:authors,id',
+            'cover_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+        ], [
+            'cover_image.mimes' => 'A imagem de capa deve ser um arquivo do tipo: jpeg, png ou jpg.',
         ]);
+
+        if ($request->hasFile('cover_image')) {
+            $image = $request->file('cover_image');
+
+            if ($book->cover_image_path && Storage::disk('public')->exists($book->cover_image_path)) {
+                Storage::disk('public')->delete($book->cover_image_path);
+            }
+
+            $filename = Str::uuid() . '.' . $image->getClientOriginalExtension();
+
+            $manager = new ImageManager(
+                new \Intervention\Image\Drivers\Gd\Driver()
+            );
+
+            $resizedImage = $manager->read($request->file('cover_image'))
+                ->resize(200, 200)
+                ->toJpeg();
+
+            Storage::disk('public')->put("covers/{$filename}", $resizedImage);
+
+            $validatedData['cover_image_path'] = "covers/{$filename}";
+        }
 
         $book->update($validatedData);
 
@@ -83,6 +139,10 @@ class BookController extends Controller
      */
     public function destroy(Book $book)
     {
+        if ($book->cover_image_path && Storage::disk('public')->exists($book->cover_image_path)) {
+            Storage::disk('public')->delete($book->cover_image_path);
+        }
+
         $book->delete();
         return redirect()->route('books.index')->with('success', 'Livro excluído com sucesso!');
     }
