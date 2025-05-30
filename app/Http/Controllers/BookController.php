@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Intervention\Image\ImageManager;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
 
 class BookController extends Controller
 {
@@ -16,8 +17,18 @@ class BookController extends Controller
      */
     public function index()
     {
-        $books = Book::with('author')->latest()->paginate(10);
-        return view('books.index', compact('books'));
+        $books = Book::with('author')->latest()->paginate(10)
+            ->through(fn ($book) => [
+                'id' => $book->id,
+                'title' => $book->title,
+                'author' => $book->author ? ['name' => $book->author->name] : null,
+                'cover_image_path' => $book->cover_image_path,
+                'publication_date' => $book->publication_date->format('Y-m-d'),
+            ]);
+
+        return Inertia::render('Books/Index', [
+            'books' => $books
+        ]);
     }
 
     /**
@@ -25,8 +36,14 @@ class BookController extends Controller
      */
     public function create()
     {
-        $authors = Author::where('status', 'active')->orderBy('name')->get();
-        return view('books.create', compact('authors'));
+        $authors = Author::where('status', 'active')->orderBy('name')->get()->map(fn ($author) => [
+            'id' => $author->id,
+            'name' => $author->name,
+        ]);
+
+        return Inertia::render('Books/Create', [
+            'authors' => $authors
+        ]);
     }
 
     /**
@@ -80,7 +97,19 @@ class BookController extends Controller
     public function show(Book $book)
     {
         $book->load('author');
-        return view('books.show', compact('book'));
+        return Inertia::render('Books/Show', [
+            'book' => [
+                'id' => $book->id,
+                'title' => $book->title,
+                'description' => $book->description,
+                'publication_date' => $book->publication_date->format('Y-m-d'),
+                'cover_image_path' => $book->cover_image_path,
+                'author' => $book->author ? [
+                    'id' => $book->author->id,
+                    'name' => $book->author->name,
+                ] : null,
+            ]
+        ]);
     }
 
     /**
@@ -88,8 +117,22 @@ class BookController extends Controller
      */
     public function edit(Book $book)
     {
-        $authors = Author::where('status', 'active')->orderBy('name')->get();
-        return view('books.edit', compact('book', 'authors'));
+        $authors = Author::where('status', 'active')->orderBy('name')->get()->map(fn ($author) => [
+            'id' => $author->id,
+            'name' => $author->name,
+        ]);
+
+        return Inertia::render('Books/Edit', [
+            'book' => [
+                'id' => $book->id,
+                'title' => $book->title,
+                'description' => $book->description,
+                'publication_date' => $book->publication_date->format('Y-m-d'),
+                'author_id' => $book->author_id,
+                'cover_image_path' => $book->cover_image_path,
+            ],
+            'authors' => $authors
+        ]);
     }
 
     /**
